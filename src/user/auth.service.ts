@@ -30,11 +30,8 @@ export class AuthService {
     return user;
   }
 
-  // Add this method to verify the password during sign-in
   async signIn(email: string, password: string): Promise<{ token: string }> {
     const user = await this.validateUserByEmail(email, password);
-
-    // If the validation is successful, generate and return a JWT token
     const token = await this.generateToken(user.id, user.email);
 
     return { token };

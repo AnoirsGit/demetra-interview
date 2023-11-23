@@ -5,6 +5,7 @@ import { DatabaseModule } from './database/database.module';
 import { UserModule } from './user/user.module';
 import { ConfigModule } from '@nestjs/config';
 import { ProxyService } from './proxy/proxy.service';
+
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),

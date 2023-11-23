@@ -1,27 +1,35 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from './user.entity';
-import { InjectQueue } from '@nestjs/bull';
-import { Queue } from 'bull';
+import * as bcrypt from 'bcrypt';
+import { AuthUserDto } from './user.dto';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
+
 @Injectable()
 export class UserService {
   constructor(
     @InjectRepository(User)
     public readonly userRepository: Repository<User>,
-    @InjectQueue('userQueue')
-    private readonly userQueue: Queue,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
 
-  async createUser(user: User): Promise<User> {
-    const createdUser = await this.userRepository.save(user);
+  async createUser(authUserDto: AuthUserDto): Promise<User> {
+    const { email, password } = authUserDto;
+    const existingUser = await this.findByEmail(email);
 
-    await this.userQueue.add(
-      'updateUserStatus',
-      { userId: createdUser.id },
-      { delay: 10000 },
-    );
-    return createdUser;
+    if (existingUser) {
+      throw new BadRequestException('ERR_USER_EMAIL_EXISTS');
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const newUser = new User();
+    newUser.email = email;
+    newUser.password = hashedPassword;
+
+    return this.userRepository.save(newUser);
   }
 
   async findByEmail(email: string): Promise<User | undefined> {
@@ -29,6 +37,20 @@ export class UserService {
   }
 
   async findById(id: number): Promise<User | undefined> {
-    return this.userRepository.findOne({ where: { id } });
+    const cachedUserString = await this.cacheManager.get<string>(`user_${id}`);
+
+    if (cachedUserString) return JSON.parse(cachedUserString) as User;
+
+    const foundUser = await this.userRepository.findOne({ where: { id } });
+    if (foundUser) {
+      await this.cacheManager.set(
+        `user_${id}`,
+        JSON.stringify(foundUser),
+        30 * 60 * 1000,
+      );
+      return foundUser;
+    }
+
+    throw new BadRequestException('ERR_USER_NOT_FOUND');
   }
 }

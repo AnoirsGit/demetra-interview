@@ -1,3 +1,4 @@
+// Import the UserService at the top of your UserController
 import {
   Controller,
   Post,
@@ -12,7 +13,8 @@ import { UserService } from './user.service';
 import { AuthUserDto } from './user.dto';
 import { User } from './user.entity';
 import { AuthService } from './auth.service';
-import * as bcrypt from 'bcrypt';
+
+// ...
 
 @Controller('user')
 export class UserController {
@@ -23,22 +25,8 @@ export class UserController {
 
   @Post('signup')
   @UsePipes(new ValidationPipe())
-  async signUp(@Body() AuthUserDto: AuthUserDto): Promise<{ message: string }> {
-    const { email, password } = AuthUserDto;
-    const existingUser = await this.userService.findByEmail(email);
-
-    if (existingUser) throw new BadRequestException('ERR_USER_EMAIL_EXISTS');
-
-    // Hash the password before saving it to the database
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Create a new user with the hashed password
-    const newUser = new User();
-    newUser.email = email;
-    newUser.password = hashedPassword;
-
-    // Save the user to the database
-    await this.userService.createUser(newUser);
+  async signUp(@Body() authUserDto: AuthUserDto): Promise<{ message: string }> {
+    await this.userService.createUser(authUserDto);
     return { message: 'User registered successfully' };
   }
 
