@@ -4,15 +4,15 @@ import {
   Body,
   UsePipes,
   ValidationPipe,
-  UnauthorizedException,
   BadRequestException,
   Get,
   Param,
 } from '@nestjs/common';
 import { UserService } from './user.service';
-import { CreateUserDto, LoginUserDto } from './user.dto';
+import { AuthUserDto } from './user.dto';
 import { User } from './user.entity';
 import { AuthService } from './auth.service';
+import * as bcrypt from 'bcrypt';
 
 @Controller('user')
 export class UserController {
@@ -23,36 +23,36 @@ export class UserController {
 
   @Post('signup')
   @UsePipes(new ValidationPipe())
-  async signUp(
-    @Body() createUserDto: CreateUserDto,
-  ): Promise<{ message: string }> {
-    const { email, password } = createUserDto;
+  async signUp(@Body() AuthUserDto: AuthUserDto): Promise<{ message: string }> {
+    const { email, password } = AuthUserDto;
     const existingUser = await this.userService.findByEmail(email);
 
     if (existingUser) throw new BadRequestException('ERR_USER_EMAIL_EXISTS');
 
+    // Hash the password before saving it to the database
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create a new user with the hashed password
     const newUser = new User();
     newUser.email = email;
-    newUser.password = password;
+    newUser.password = hashedPassword;
 
+    // Save the user to the database
     await this.userService.createUser(newUser);
-
     return { message: 'User registered successfully' };
   }
 
   @Post('signin')
   @UsePipes(new ValidationPipe())
-  async signIn(@Body() loginUserDto: LoginUserDto): Promise<{ token: string }> {
-    const { email, password } = loginUserDto;
+  async signIn(@Body() signInDto: AuthUserDto): Promise<{ token: string }> {
+    const { email, password } = signInDto;
 
-    const user = await this.userService.findByEmail(email);
-
-    if (!user || !(await this.authService.validateUser(user, password))) {
-      throw new UnauthorizedException('INVALID_CREDENTIALS');
+    try {
+      const result = await this.authService.signIn(email, password);
+      return result;
+    } catch (error) {
+      throw new BadRequestException('INVALID_CREDENTIALS');
     }
-
-    const token = await this.authService.generateToken(user.id, user.email);
-    return { token };
   }
 
   @Get('get-user-by-id/:id')
